@@ -19,10 +19,10 @@ then simply open your project with Xcode, it will download the dependencies
 ## Swift Package Manager
 similar to CocoaPods in IOS, notice how you can run the Xcode project without the Xcode project template, because when using SPM it will create a workspace in a hidden folder, the dependencies are declared in the `Package.swift` file with the target, and how they link together
 
-setting up endpoints is mostly the same as for node, here is a code that takes a parameter from the url, and handles errors then, returns a string
+setting up endpoints is mostly the same as for node, here is a code that takes a parameter from the url, and handles errors then, returns a string 
 
 ```swift
-app.get("hello", ":name") { req -> String in
+app.get("hello", ":name") { req -> String in 
   guard let name = req.parameters.get("name") else {
 	throw Abort(.internalServerError)
   }
@@ -42,7 +42,7 @@ struct InfoResponse: Content {
   let request: String
 }
 
-app.post("info") { req -> InfoResponse in
+app.post("info") { req -> InfoResponse in 
   let data = try req.content.decode(InfoData.self)
   return InfoResponse(request: data)
 ```
@@ -77,7 +77,7 @@ Representational State Transfer, the core of many web applications, lets you def
 - `DELETE /api/acronyms/1` delete the acronym with the ID 1
 
 # Async
-This concept is important because it lets us run multiple threads at a time, instead of trying to fetch something and it puts the whole website on pause, in an asynchronous server, these requests that take time will be put to side until the fetching is complete.
+This concept is important because it lets us run multiple threads at a time, instead of trying to fetch something and it puts the whole website on pause, in an asynchronous server, these requests that take time will be put to side until the fetching is complete. 
 To put it aside until it resolves, we must put wrap it in a **promise**, here is some Vapor code of a synchronous vs async operation:
 
 ```swift
@@ -118,11 +118,11 @@ used when you only care that the future completed and not the result
 
 ```swift
 return database.getAllUsers().flatMap { users in
-  let user = users[0]
-  user.name = "Bob"
-  return user
-	.save(on: req.db)
-	.transform(to: HTTPStatus.noContent)
+  let user = users[0] 
+  user.name = "Bob" 
+  return user 
+	.save(on: req.db) 
+	.transform(to: HTTPStatus.noContent) 
 }
 ```
 
@@ -254,7 +254,7 @@ It is done using the wrapper `Content`, and creating the endpoint obviously, and
 ```
 
 # Databases
-The database used for the project is specified in the `package.swift` and the database configuration happens in `Sources/App/configure.swift`
+The database used for the project is specified in the `package.swift` and the database configuration happens in `Sources/App/configure.swift` 
 - first import the driver
 - configure it depending on your db, for example an in-memory SQLite, or setting up the host password, user name and all
 
@@ -379,7 +379,7 @@ wrapper. The column type, uuid, matches the ID column type from CreateUser.
 
 ## Domain-Transfer-Object
 used to simplify the request, and basically represents what a client should send or receive, good to use when you’re dealing with complex data structure
-change the controller and add the DTO
+change the controller and add the DTO 
 
 ```swift
 struct CreateAcronymData: Content {
@@ -449,7 +449,7 @@ and the migration:
 
 note that it is good practice to use **foreign key** constraints with sibling relationships too. if we don’t we can for example, delete acronyms and categories that are still linked by the pivot and the
 relationship will remain, without flagging an error.
-now we add to the migration list
+now we add to the migration list 
 
 ```swift
 app.migrations.add(CreateAcronymCategoryPivot())
@@ -554,8 +554,8 @@ func testUserCanBeRetrievedFromAPI() throws {
 		XCTAssertEqual(users[0].name, expectedName)
 		XCTAssertEqual(users[0].username, expectedUsername)
 		XCTAssertEqual(users[0].id, user.id)
-	})
-}
+	})	
+}  
 ```
 
 these are a bunch of basic tests that will create 2 users and see if they get saved, now we need to set up the `configure.swift` to use a different environment, one in running the app and one in testing
@@ -588,7 +588,7 @@ try app.autoRevert().wait()
 try app.autoMigrate().wait()
 ```
 
-now logically we should test all the endpoints, so instead of writing that MASSIVE chunk of code each time, we create a reusable piece of code, see the Xcode project, we built `Application+Testable.swift` and `Models+Testable.swift` to be able to reuse the code later, than created a test for each endpoint.
+now logically we should test all the endpoints, so instead of writing that MASSIVE chunk of code each time, we create a reusable piece of code, see the Xcode project, we built `Application+Testable.swift` and `Models+Testable.swift` to be able to reuse the code later, than created a test for each endpoint. 
 In `Models+Testable.swift` we create all the models we’re going to use for testing, for example when retrieving an acronym from the user, we should create a new Model inside it like such
 
 ```swift
@@ -614,3 +614,287 @@ extension Acronym {
 
 The Xcode project goes in detail about testing all our models.
 > To learn more about testing in linux, which does not interest me yet, check the book
+
+# Building An iOS App
+what we’re going to do is have two separate apps, Our previous app we built all this time then the iOS App we will talk to, What the iOS app has for now is just a skeleton that interacts with the *TIL* API.
+
+To create an iOS app that performs the crud operations that we built:
+- We create a model structure that matches ours, the fact that we built the backend in the same language helps immensely, this was (just like in Vapor) made inside the `/Models` folder
+- create the network service that handles the API using the `Foundation` module 
+- create a way to fetch all instances of a particular resource type (we implemented the `getAll()` function inside the `ResourceRequest.swift`), it gets all the values from the API, here is the function:
+
+```swift
+// this function gets the values of the resource typr from the API
+func getAll(
+	completion: @escaping
+	(Result<[ResourceType], ResourceRequestError>) -> Void ) {
+		// create a variable with the resource URL
+		let dataTask = URLSession.shared
+			.dataTask(with: resourceURL) { data, _, _ in
+				// decodes the response
+				guard let jsonData = data else {
+					completion(.failure(.noData))
+					return
+				}
+				do {
+					let ressource = try JSONDecoder()
+						.decode([ResourceType].self, from: jsonData)
+					completion(.success(ressource))
+				} catch {
+					completion(.failure(.decodingError))
+				}
+			}
+```
+
+> this creates a ressource Request, we will be able to provide it with the type, and API path
+- we create a table and the request
+
+```swift
+var acronyms: [Acronym] = []
+let acronymsRequest = ResourceRequest<Acronym>(resourcePath: "acronym")
+```
+
+- then on every refresh of the `acronymsRequest` will call the `.getAll` method.
+- the next step is simply displaying the table in our UI
+
+```swift
+let acronym = acronyms[indexPath.row]
+cell.textLabel?.text = acronym.short
+cell.detailTextLabel?.text = acronym.long
+```
+
+when trying to fetch something else like an array of users, we create another `ViewController`.
+
+let’s implement creating a user in the iOS app:
+
+- Set Up Your iOS Project
+- Create a new iOS project in Xcode.
+- Configure App Transport Security
+- Modify the Info.plist file to allow HTTP requests by adding the appropriate settings.
+- Create a Network Manager
+- Create a NetworkManager class to handle network requests to your Vapor API.
+- Set Up Your ViewController
+- Modify the main ViewController to utilise the NetworkManager for fetching data when the view loads.
+- Update the User Interface
+- Add a `UILabel` in the storyboard to display the fetched data and create an outlet for it in the ViewController.
+- Handle JSON Data (if applicable)
+- If your API returns JSON, define a `Codable` model to represent the data.
+- Update the NetworkManager to decode the JSON response into your model.
+
+## Implement a Delete Operation
+Here is a step by step on how to implement a Delete operation in the App:
+First we need to make sure the `AcronymRequest.swift` handles the delete request, like the other request we may have implemented
+
+```swift
+func delete() {
+	// create urlRequest and set the Method
+	var urlRequest = URLRequest(url: resource)
+	urlRequest.httpMethod = "DELETE"
+	// Create a data task for the request using the shared URLSession and send the request
+	let dataTask = URLSession.shared.dataTask(with: urlRequest)
+	dataTask.resume()
+}
+```
+
+Next we enable the deletion of the table row
+
+```swift
+override func tableView(
+	_ tableView: UITableView,
+	commit editingStyle: UITableViewCell.EditingStyle,
+	forRowAt indexPath: IndexPath
+) {
+	if let id = acronyms[indexPath.row].id {
+		// in case of valid ID, create an AcronymRequest, and call the delete()
+		let acronymDetailRequester = AcronymRequest(acronymID: id)
+		acronymDetailRequester.delete()
+	}
+	
+	// remove the acronym from the local array of acronyms
+	acronyms.remove(at: indexPath.row)
+	// remove the acronym row from the table view
+	tableView.deleteRows(at: [indexPath], with: .automatic)
+}
+```
+
+Ta-Da, done as simple as this, just one interface config and one API call
+
+## Creating a Category
+We first need to implement the `save(_:)`:
+
+```swift
+@IBAction func save(_ sender: Any) {
+	// Check if the name text field has a value and is not empty
+	guard
+		let name = nameTextField.text, // Get the text from the nameTextField
+		!name.isEmpty // Ensure the text is not empty
+	else {
+		// If the name is empty, show an error message
+		ErrorPresenter.showError(
+			message: "You must specify a name", // Error message
+			on: self) // Present the error on the current view controller
+		return // Exit the function if the name is invalid
+	}
+	
+	// Create a new Category object with the specified name
+	let category = Category(name: name)
+	
+	// Create a ResourceRequest for the "categories" endpoint and save the new category
+	ResourceRequest<Category>(resourcePath: "categories")
+		.save(category) { [weak self] result in // Save the category and handle the result
+			switch result {
+			case .failure:
+				// If saving fails, show an error message
+				let message = "There was a problem saving the category"
+				ErrorPresenter.showError(message: message, on: self) // Present the error
+			case .success:
+				// If saving is successful
+				DispatchQueue.main.async { [weak self] in
+					// Navigate back to the previous view controller
+					self?.navigationController?
+						.popViewController(animated: true) // Animate the transition back
+				}
+			}
+		}
+}
+```
+
+note this:
+1. `DispatchQueue.main.async `: This line ensures that the following code runs on the main thread. UI updates (like navigating between view controllers) should always be done on the main thread to maintain a responsive user interface.
+2. `self?.navigationController?` : This accesses the navigation controller associated with the current view controller. A navigation controller is responsible for managing a stack of view controllers, allowing you to navigate back and forth between them.
+3. `popViewController(animated: true)`: This method is called on the navigation controller to remove the current view controller from the navigation stack and go back to the previous one. The animated: true parameter means that the transition will include a visual animation, making the navigation feel smoother.
+In summary, the .success case indicates that the category was saved successfully. The code then navigates back to the previous screen in the app, allowing the user to see the updated list of categories or return to the previous context.
+
+Now we must add the ability to add an acronym to the category:
+
+```swift
+func loadData() {
+	// Create a ResourceRequest for the "categories" endpoint
+	let categoriesRequest = ResourceRequest<Category>(resourcePath: "categories")
+	
+	// Perform a request to get all categories
+	categoriesRequest.getAll { [weak self] result in
+		// Handle the result of the request
+		switch result {
+		case .failure:
+			// If the request fails, show an error message
+			let message = "There was an error getting the categories"
+			ErrorPresenter.showError(message: message, on: self) // Present the error on the current view controller
+			
+		case .success(let categories):
+			// If the request is successful, store the retrieved categories
+			self?.categories = categories
+			
+			// Update the UI on the main thread
+			DispatchQueue.main.async { [weak self] in
+				// Reload the table view to display the new categories
+				self?.tableView.reloadData()
+			}
+		}
+	}
+}
+```
+
+now we handle the POST request:
+
+```swift
+func add(
+  category: Category,
+  completion: @escaping (Result<Void, CategoryAddError>) -> Void) {
+  // Ensure the category has a valid ID
+  guard let categoryID = category.id else {
+    completion(.failure(.noID)) // Return an error if no ID is found
+    return
+  }
+  
+  // Construct the URL for the POST request
+  let url = resource
+    .appendingPathComponent("categories") // Add "categories" to the path
+    .appendingPathComponent("\(categoryID)") // Add the category ID to the path
+  
+  // Create a URLRequest for the specified URL
+  var urlRequest = URLRequest(url: url)
+  urlRequest.httpMethod = "POST" // Set the HTTP method to POST
+  
+  // Create a data task to send the request
+  let dataTask = URLSession.shared
+    .dataTask(with: urlRequest) { _, response, _ in
+      // Ensure the response is valid and has a status code of 201 (Created)
+      guard
+        let httpResponse = response as? HTTPURLResponse,
+        httpResponse.statusCode == 201
+      else {
+        completion(.failure(.invalidResponse)) // Return an error for invalid response
+        return
+      }
+      
+      // If the request is successful, call the completion handler with success
+      completion(.success(()))
+    }
+  
+  // Start the data task
+  dataTask.resume()
+}
+```
+
+ and now the final part:  
+
+```swift
+extension AddToCategoryTableViewController {
+  // Override the method that is called when a row in the table view is selected
+  override func tableView(
+    _ tableView: UITableView,
+    didSelectRowAt indexPath: IndexPath
+  ) {
+    // 1: Get the selected category from the categories array using the selected row index
+    let category = categories[indexPath.row]
+    
+    // 2: Check if the acronym has a valid ID
+    guard let acronymID = acronym.id else {
+      // If the acronym has no ID, show an error message
+      let message = """
+        There was an error adding the acronym
+        to the category - the acronym has no ID
+      """
+      ErrorPresenter.showError(message: message, on: self) // Present the error on the current view controller
+      return // Exit the function if the acronym ID is invalid
+    }
+    
+    // 3: Create an AcronymRequest object to manage the request for adding the acronym to the category
+    let acronymRequest = AcronymRequest(acronymID: acronymID)
+    
+    // Call the add method on the acronymRequest to add the selected category
+    acronymRequest.add(category: category) { [weak self] result in
+      // Handle the result of the add operation
+      switch result {
+        // 4: If the addition is successful
+      case .success:
+        DispatchQueue.main.async { [weak self] in
+          // Navigate back to the previous view controller
+          self?.navigationController?
+            .popViewController(animated: true)
+        }
+        
+        // 5: If there was a failure in adding the acronym to the category
+      case .failure:
+        // Show an error message indicating the failure
+        let message = """
+          There was an error adding the acronym
+          to the category
+        """
+        ErrorPresenter.showError(message: message, on: self) // Present the error on the current view controller
+      }
+    }
+  }
+}
+```
+
+This method allows the user to select a category from a table view and attempts to add an acronym to that category. It includes error handling for cases where the acronym ID is missing or the addition fails, ensuring a smooth user experience.
+Now, we just add this line of code to `makeAddToCategoryController(_:)` to return a `AddToCategoryTableViewController` created with the current acronym and its categories
+
+```swift
+AddToCategoryTableViewController(
+	coder: coder,
+	acronym: acronym,
+	selectedCategories: categories)
+```
