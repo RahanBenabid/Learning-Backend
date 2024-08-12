@@ -898,3 +898,178 @@ AddToCategoryTableViewController(
 	acronym: acronym,
 	selectedCategories: categories)
 ```
+
+# Leaf
+Vapor’s templating language, it allows you to pass infos to a page to generate HTML, also to avoid **duplication**, instead of creating multiple, you just create a template and set the properties that should be displayed, so when you change your code, you only change it in one place, it also allows you to embed templates into other templates.
+You can either create a new project and select using leaf, or just add it to your dependencies `Package.swift` file.
+The templates should be inside the `/Resources/Views` folder inside your project, and **ONLY THE VIEWS YOU DUMBASS**
+First things first, some routes should be created, let’s create `WebsiteController.swift` inside the `Controllers` folder like the other controllers, the routes handling is very similar to the `/Controllers` routes, the `boot()` function and `@Sendable` also, here’s what the function looks like:
+
+```swift
+@Sendablec func indexHandler(_ req: Request) -> EventLoopFuture<View> {
+  return req.view.render("index")
+}
+```
+
+This renders the index template and return the result. This will try to render `index.leaf`, which is like a classic `.html` file:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8"/>
+        <title>Hello World</title>
+    </head>
+    <body>
+        <h1>Hello World</h1>
+    </body>
+</html>
+```
+
+and now register the route, like all the other from the backend, in `routes.swift`
+
+```swift
+let websiteController = WebsiteController()
+try app.register(collection: websiteController)
+```
+
+and in the `configure.swift`, write 
+
+```swift
+app.views.use(.leaf)
+```
+
+To tell vapor to use Leaf when rendering pages, and configure the custom working directory, now just open the [localhost][1] link, But this just shows a normal static page, what if we want to display real data inside it? We can write something like this
+
+```html
+<title>#(title) | Acronyms</title>
+```
+
+and then set the title variable inside the `WebsiteController.swift`
+
+create the class:
+
+```swift
+struct IndexContext: Encodable {
+  let title: String
+}
+```
+
+set it then pass it:
+
+```swift
+@Sendable func indexHandler(_ req: Request) -> EventLoopFuture<View> {
+  // create an Encodable IndexTitle containing the title we want
+  let context = IndexContext(title: "Home Page")
+  // pass it as a second parameter
+  return req.view.render("index", context)
+}
+```
+
+let’s go even further and query the database to display a list of Acronyms
+
+```swift
+struct IndexContext: Encodable {
+	let title: String
+	let acronyms: [Acronym]?
+}
+
+@Sendable func indexHandler(_ req: Request) -\> EventLoopFuture\<View\> {
+	Acronym.query(on: req.db).all().flatMap { acronyms in
+	let acronymsData = acronyms.isEmpty ? nil : acronyms
+	let context = IndexContext(title: "Home Page", acronymsData)
+	return req.view.render("index", context)
+	}
+}
+```
+
+This fetches the list of Acronyms from the database and passes them to the View, inside the view we’re gonna write a bit of HTML with some syntax:
+
+```html
+#if(acronyms):
+	<table>
+		<thead>
+			<tr>
+				<th>Short</th>
+				<th>Long</th>
+			</tr>
+		</thead>
+		<tbody>
+			#for(acronym in acronyms):
+				<tr>
+					<td>#(acronym.short)</td>
+					<td>#(acronym.long)</td>
+				</tr>
+			#endfor
+		</tbody>
+	</table>
+#else:
+		<h2>There aren't any acronyms yet!</h2>
+#endif
+```
+
+Look up the Xcode project for even more fancy stuff
+
+> Notice that when testing the endpoint in RapidAPI, you can send request to [http://127.0.0.1:8080 ][2] and [http://127.0.0.1:8080/api][3] separately, one returns HTML, the other return json data respectively
+
+# Embedding Templates
+Is needed so that you only make changes in one place, the changes might be styling for example, so that you don’t have to change your style in every file, let’s start by creating `base.leaf` in the `/Views` folder:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8"/>
+		<title>#(title) | Acronyms</title>
+	</head>
+	<body>
+		#import("content")
+	</body>
+</html>
+```
+
+what this does is:  Every file you make now will have this already without writing it all over again, you just need to add:
+
+```html
+#extend("base"):
+	#export("content"):
+	<!-- add all the additions specific to your file -->
+	#endexport
+#endextend
+```
+
+we extend our file and replace our `"content"` variable, This takes the HTML specific to index.leaf and wraps it in an #export tag. When Leaf renders base.leaf as required by index.leaf, it takes content and inserts it into the base template. let’s take our `acronym.leaf`, here’s what it looks like now, just a couple of lines
+
+```html
+#extend("base"):
+	#export("content"):
+		<h1>#(acronym.short)</h1>
+		<h2>#(acronym.long)</h2>
+		<p>Created by #(user.name)</p>
+	#endexport
+#endextend
+```
+
+Go check the project for the file configuration using **Bootstrap**.
+
+### Serving Content
+What we’ve been doing till now is serve data such as *JSON*, but what about images or style sheets, first off we add the middleware that is able to serve files:
+
+```swift
+app.middleware.use(
+	FileMiddleware(publicDirectory: app.directory.publicDirectory)
+)
+```
+
+This serves files in the `/Public` directory.
+
+### Sharing templates
+in the project, we ended up creating the acronym table twice, in the Front page and the user page, so when we need to modify it, we’ll end up doing it twice, instead we should create a separate file called `acronymsTable.leaf`, write the whole table inside it and go to where the table was written, and simply inset
+
+```swift
+#extend("acronymsTable")
+```
+
+[1]:	http://localhost:8080
+[2]:	http://127.0.0.1:8080
+[3]:	http://127.0.0.1:8080
