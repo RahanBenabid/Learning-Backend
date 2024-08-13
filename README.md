@@ -378,7 +378,7 @@ This adds the new column for user using the key provided to the @Parent property
 wrapper. The column type, uuid, matches the ID column type from CreateUser.
 
 ## Domain-Transfer-Object
-used to simplify the request, and basically represents what a client should send or receive, good to use when you’re dealing with complex data structure
+used to simplify the request, and basically represents what a client should send or receive, good to use when you’re dealing with complex data structure, it’s just a simple way of sending and receiving data between the server and client, it’s just a property that holds data. it packages (compresses multiple pieces of data together so that we can only transfer what’s important.
 change the controller and add the DTO 
 
 ```swift
@@ -1068,6 +1068,53 @@ in the project, we ended up creating the acronym table twice, in the Front page 
 
 ```swift
 #extend("acronymsTable")
+```
+
+# Creating/Modifying models
+The goal now is to create an acronym IN the interface, for that we should implement *two routes*: 
+- handle a **GET** request to display the form the user will fill
+- handle the **POST** request after the user submits their acronym
+For the GET part, we need to display the list of users, so that the user can select which one created the acronym, pretty dumb but we’ll so it like this for now, just create a handler that sends a list of users
+Now for the POST request… the code handles the creation of a new acronym by decoding the request data, creating an Acronym instance, saving it to the database, and redirecting the user to the newly created acronym's page:
+
+```swift
+@Sendable func createAcronymPostHandler(_ req: Request) throws -> EventLoopFuture<Response> {
+    // Decode the request content into a CreateAcronymData struct
+    let data = try req.content.decode(CreateAcronymData.self)
+    
+    // Create a new Acronym instance with the data from the request
+    let acronym = Acronym(
+        short: data.short,
+        long: data.long,
+        userID: data.userID
+    )
+    
+    // Save the new acronym to the database
+    return acronym.save(on: req.db).flatMapThrowing {
+        // Ensure the ID is set after saving, or else throw a server error
+        guard let id = acronym.id else {
+            throw Abort(.internalServerError)
+        }
+        
+        // Redirect the user to the newly created acronym's page
+        return req.redirect(to: "/acronyms/\(id)")
+    }
+}
+```
+
+We’ll do the same for editing the acronyms of course, now the real issue is with the **DELETE**, browsers have no simple way of sending DELETE requests, so what we’re gonna do is send a POST request a delete a route, we’ll registers a route at [/acronyms/\<ACRONYM ID\>/delete]() to accept POST requests and call `deleteAcronymHandler(\_:)`
+
+```swift
+func deleteAcronymHandler(_ req: Request) -> EventLoopFuture<Response> {
+	Acronym
+	  .find(req.parameters.get("acronymID"), on: req.db)
+	  .unwrap(or: Abort(.notFound)).flatMap { acronym in
+		acronym.delete(on: req.db)
+		.transform(to: req.redirect(to: "/"))
+	}
+}
+
+routes.post("acronyms", ":acronymID", "delete", use: deleteAcronymHandler)
 ```
 
 [1]:	http://localhost:8080
