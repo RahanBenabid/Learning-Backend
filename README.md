@@ -1117,6 +1117,12 @@ func deleteAcronymHandler(_ req: Request) -> EventLoopFuture<Response> {
 routes.post("acronyms", ":acronymID", "delete", use: deleteAcronymHandler)
 ```
 
+### Add Acronyms to Categories 
+The issue here is that in web applications, they need to accept all the infos *in one request*, so knowing this, we create an **extension** to `Category.swift` that:
+- checks for the category that we submitted
+- creates the relationship if the category exists
+- if the category doesn’t exist, then create the category AND the relationship
+
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
 [3]:	http://127.0.0.1:8080
