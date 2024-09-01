@@ -1117,12 +1117,259 @@ func deleteAcronymHandler(_ req: Request) -> EventLoopFuture<Response> {
 routes.post("acronyms", ":acronymID", "delete", use: deleteAcronymHandler)
 ```
 
-### Add Acronyms to Categories 
+### Add Acronyms to Categories
 The issue here is that in web applications, they need to accept all the infos *in one request*, so knowing this, we create an **extension** to `Category.swift` that:
 - checks for the category that we submitted
 - creates the relationship if the category exists
 - if the category doesn’t exist, then create the category AND the relationship
 
+# Password
+To give users some privacy (big corps should learn from me hehe). We just create a new field and initialise it, but it’ll be more complex than just creating a normal field
+
+```swift
+@Field(key: "password")
+var password: String
+
+/*
+...
+*/
+
+init(id: UUID? = nil, name: String, username: String, password: String) {
+	self.name = name
+	self.username = username
+    self.password = password
+}
+```
+
+now we **shouldn’t** store the user password in plain text. So in the user creation controller, we just hash our password using `Bcrypt`
+
+```swift
+user.password = try Bcrypt.hash(user.password)
+```
+
+As simple as it gets, of course, after changes like these in the database, we must reset it, and thankfully, since it’s contained in docker, we just reset it like
+
+```bash
+docker stop postgres
+
+docker rm postgres
+
+docker run --name postgres -e POSTGRES_DB=vapor_database \
+	-e POSTGRES_USER=vapor_username \
+	-e POSTGRES_PASSWORD=vapor_password \
+	-p 5432:5432 -d postgres
+```
+
+Now, another security issues, is that the password should never be returned in the API request, instead we make it so that we return a *Public View* of the user, so we create a public class inside the `User.swift` to create the class that will be sent back in the API request, we create extensions to handle converting the user model (with the password) to a public model (without password) by adding extensions to our user model like this
+
+```swift
+// represents the object that will be sent in the GET API
+extension User {
+	func convertToPublic() -> User.Public {
+		return User.Public(id: id, name: name, username: username)
+	}
+}
+
+// this will help to reduce nesting, it will call convertToPublic() on EventLoopFuture<User>, [User] and EventLoopFuture<[User]>, they allow you to change your route to handle returning a public user
+
+extension EventLoopFuture where Value: User {
+	func convertToPublic() -> EventLoopFuture<User.Public> {
+		return self.map { user in
+			return user.convertToPublic()
+		}
+	}
+}
+
+extension Collection where Element: User {
+	func convertToPublic() -> [User.Public] {
+		return self.map { $0.convertToPublic() }
+	}
+}
+
+extension EventLoopFuture where Value == Array<User> {
+	func convertToPublic() -> EventLoopFuture<[User.Public]> {
+		return self.map { $0.convertToPublic() }
+	}
+}
+```
+ 
+then in all the handlers, we will return a `User.Public` and use the `. convertToPublic()` method
+
+```swift
+// now this function will use the extension EventLoopFuture<[User]> for the return type
+@Sendable func getAllHandler(_ req: Request) -> EventLoopFuture<[User.Public]> {
+	User.query(on: req.db).all().convertToPublic()
+}
+```
+
+> do not forget to change the return type wherever the user is mentioned, in the Acronyms for example
+
+# Authentification
+We need to generate the token for that, and using the HTTP standardised method, we **combine** the username and password, then **Base64-encode** the result.
+
+```bash
+# combine
+rahan:password
+
+# B64-encode
+cmFoYW46cGFzc3dvcmQ=
+```
+
+the header will be
+
+```bash
+Authorization: Basic dGltYzpwYXNzd29yZA==
+```
+
+Vapor, already has built-in HTTP Auth, first we add method will be using to conform the User to the HTTP Auth protocol, we will tell Vapor which fields to use when making authentication 
+
+```swift
+// The ModelAuthenticable will allow Fluent models to use the HTTP Auth
+extension User: ModelAuthenticatable {
+	
+	// tells fluents the username and password path
+	static let usernameKey = \User.$username
+	static let passwordHashKey = \User.$password
+	
+	// very the hash here (you hash the input password and compare the result with the db hash)
+	func verify(password: String) throws -> Bool {
+		try Bcrypt.verify(password, created: self.password)
+	}
+}
+```
+
+next we set up a **middleware** to ensure that only authenticated users can access certain routes. It groups routes together under this protection. Finally, it defines a POST route that will only be accessible if the user is authenticated.
+
+```swift
+// creates an instance of ModelAuthenticator and GuardAuthenticationMiddlware to use basic HTTP auth and checks if the credentials are valid, and then ensures that the request contains an authenticated user
+let basicAuthMiddleware = User.authenticator()
+let guardAuthMiddleware = User.guardMiddleware()
+// create a group
+let protected = acronymsRoutes.grouped(
+	basicAuthMiddleware,
+	guardAuthMiddleware)
+// connects the create acronym path to createHandler(), through this middleware
+protected.post(use: createHandler)
+
+
+// we delete
+acronymsRoutes.post(use: createHandler)
+```
+
+> Middleware allows you to intercept requests and responses in your application. In this example, basicAuthMiddleware intercepts the request and authenticates the user supplied.
+
+Now, a POST request to [http://localhost:8080/api/acronyms]() will respond with a **401 unauthorised**, unless you add an Auth **username and password**, and now, only authenticated users can create an acronym. And now for better quality of life, we should let the users 
+
+# Login
+this way, you just exchange their credentials for a token they can use, it’s generated by the server upon successful authentication so that they don’t need to provide their credentials again. We simply start by creating the Token model in the `/Models` folder, it contains the `id`, `value`, and the `userID` fields, we do the rest of the work in the `/Migration` folder and `Configure.swift` file, the usual for any model, now…
+We add an **extension** to the model that will generate that token
+
+```swift
+extension Token {
+	static func generate(for user: User) throws -> Token {
+		let random = [UInt8].random(count: 16).base64
+		return try Token(value: random, userID: user.requireID())
+	}
+}
+```
+
+This is nothing crazy, just a token generator, now the loginHandler
+
+```swift
+func loginHandler(
+_ req: Request) throws
+-> EventLoopFuture<Token> {
+    let user = try req.auth.require(User.self)
+    let token = try Token.generate(for: user)
+    return token.save(on: req.db).map { token }
+}
+```
+
+this handles user login and token generation.
+
+```swift
+let basicAuthMiddleware = User.authenticator()
+let basicAuthGroup = usersRoute.grouped(basicAuthMiddleware)
+basicAuthGroup.post("login", use: loginHandler)
+```
+
+This block configures a route for user login, applying middleware to handle authentication.
+Now sending a POST request to [http://127.0.0.1:8080/api/users/login][6] with the Basic Auth, will return back a token, example:
+
+```json
+{
+	"id":"3F332D00-F76A-4E59-B878-61974B790083",
+	"user":{
+		"id":"F55FFEA3-6077-4B96-88C9-063F54C82C5C"
+	},
+	"value":"bWfypO22XAZl52dANGCvGw=="
+}
+```
+
+now since we require Authentication, we no longer need to provide the `userID` when creating an Acronym, so now instead, we remove the expected ID from the **DTO**, and in the handler, we get the authenticated user, and create a new acronym with the data fetched from that user (replace the Update one too)
+
+```swift
+let user = try req.auth.require(User.self)
+let acronym = try Acronym(
+	short: data.short,
+	long: data.long,
+	userID: user.requireID())
+```
+
+now, sending a request as the following will result in a successful acronym creation
+
+```HTTP
+POST /api/acronyms HTTP/1.1
+Authorization: Bearer pYIyt4j0ao17Ut8lYSDvdw==
+Content-Type: application/x-www-form-urlencoded; charset=utf-8
+Host: 127.0.0.1:8080
+Connection: close
+User-Agent: RapidAPI/4.1.5 (Macintosh; OS X/15.0.0) GCDHTTPRequest
+Content-Length: 28
+
+short=LOL&long=Lord+Of+Laugh
+```
+
+to make the app even more complete, and we add the token handling thingy to every controller (User, Acronym and Category)
+
+```swift
+let tokenAuthMiddleware = Token.authenticator()
+let guardAuthMiddleware = User.guardMiddleware()
+let tokenAuthGroup = usersRoute.grouped(
+	tokenAuthMiddleware,
+	guardAuthMiddleware)
+	tokenAuthGroup.post(use: createHandler)
+```
+
+This way we make sure that only an authenticated user will be able to create a new Acronym and Category. and for even more security, we will add it to the `UsersController.swift` that way only an authenticated user could create another user, but we will be stuck in case we reset a new database, that why we will **Seed The Database**, and create a user when the app first boots up, we do it using a migration
+
+```swift
+struct CreateAdminUser: Migration {
+	func prepare(on database: any Database) -> EventLoopFuture<Void> {
+		let passwordHash: String
+		do {
+			passwordHash = try Bcrypt.hash("password")
+		} catch {
+			return database.eventLoop.future(error: error)
+		}
+		
+		let user = User(
+			name: "Admin",
+			username: "admin",
+			password: passwordHash)
+		return user.save(on: database)
+	}
+	
+	func revert(on database: any Database) -> EventLoopFuture<Void> {
+		User.query(on: database)
+			.filter(\.$username == "admin")
+			.delete()
+	}
+}
+```
+
+
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
 [3]:	http://127.0.0.1:8080
+[6]:	http://127.0.0.1:8080/api/users/login
