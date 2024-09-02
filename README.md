@@ -1341,7 +1341,7 @@ let tokenAuthGroup = usersRoute.grouped(
 	tokenAuthGroup.post(use: createHandler)
 ```
 
-This way we make sure that only an authenticated user will be able to create a new Acronym and Category. and for even more security, we will add it to the `UsersController.swift` that way only an authenticated user could create another user, but we will be stuck in case we reset a new database, that why we will **Seed The Database**, and create a user when the app first boots up, we do it using a migration
+This way we make sure that only an authenticated user will be able to create a new Acronym and Category. and for even more security, we will add it to the `UsersController.swift` that way only an authenticated user could create another user, but we will be stuck in case we reset a new database, that why we will **Seed The Database**, and create a user *when* the app first boots up, we do it using a migration
 
 ```swift
 struct CreateAdminUser: Migration {
@@ -1368,6 +1368,7 @@ struct CreateAdminUser: Migration {
 }
 ```
 
+> Don’t forget updating the tests after all this work, basically the `Models+Testable.swift`, `AcronymTests.swift` and `UserTest.swift` files, all the changes have been committed to in Github
 
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
