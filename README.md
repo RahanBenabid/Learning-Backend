@@ -1370,6 +1370,25 @@ struct CreateAdminUser: Migration {
 
 > Don’t forget updating the tests after all this work, basically the `Models+Testable.swift`, `AcronymTests.swift` and `UserTest.swift` files, all the changes have been committed to in Github
 
+# Web authentication
+After we added the authentication, we did not implement it yet in the web interface, so any user can do anything for now, and unlike the iOS app, it’s not as simple as just sending the token and credentials in the api. So to work around that, browsers use **Cookies**, they’re just a *small amount of data* that the the app sends to the browser *to store locally on the computer* then when the user makes a request, the browser attaches them. They help remember user preferences, track sessions, and manage authentication.
+To authenticate users, you need to combine them with **Sessions**, they make it so that you can persist state across requests. This allows the server to recognise and authenticate users as they navigate the site.
+In Vapor, they assign each cookie with a *unique ID*, and that is done using a middleware `SessionMiddlware` , so in `configure.swift` we add the following lines
+
+```swift
+app.middleware.add(app.sessions.middleware)
+```
+
+now we add these two
+
+```swift
+// conform user to ModelSessionAuthenticatable to be able to save and retreive user as part of the session
+extension User: ModelSessionAuthenticatable {}
+// allows vapor to authenticate users with a username and password when they login, already implemented so nothing to ædd here
+extension User: ModelCredentialsAuthenticatable {}
+```
+
+
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
 [3]:	http://127.0.0.1:8080
