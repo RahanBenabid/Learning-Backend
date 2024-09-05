@@ -1600,7 +1600,7 @@ req.session.data["CSRF_TOKEN"] = token
 
 Now after the creation, we hold it in a hidden field, then extract it and compare it when submitted
 
-```swift
+```html
 #if(csrfToken):
 	<input type="hidden" name="csrfToken" value="#(csrfToken)">
 #endif
@@ -1619,6 +1619,81 @@ guard
 else {
 	throw Abort(.badRequest)
 }
+```
+
+# Validation
+Now it’s time to make a register page, and validate the infos the users sent
+first off, we create the sign in page
+
+```html
+#extend("base"):
+	#export("content"):
+		<h1>#(title)</h1>
+		<form method="post">
+			<div class="form-group">
+			<label for="name">Name</label>
+			<input type="text" name="name" class="form-control"
+			id="name"/>
+			</div>
+		</form>
+		<!-- same for the other fields (username, pass, confirm pass) -->
+	#endexport
+#endextend
+```
+
+now we create a new context structure, a *handler* and a *POST* struct context and handler, in order
+
+```swift
+// structure for the context
+struct RegisterContext: Encodable {
+	let title = "Register"
+}
+
+// 
+func registerHandler(_ req: Request) -> EventLoopFuture<View> {
+	let context = RegisterContext()
+	return req.view.render("register", context)
+}
+
+// 
+struct RegisterData: Content {
+	let name: String
+	let username: String
+	let password: String
+	let confirmPassword: String
+}
+
+//
+func RegisterPostHandler(_ req: Request) -> EventLoopFuture<Response> {
+	let data = req.content.decode(RegisterData.self)
+	let password = try Bcrypt.hash(data.password)
+	let user = User(
+		name: data.name,
+		username: data.username,
+		password: password)
+	return user.save(on: req.db).map {
+		// authenticate the user, and automatically logs him in
+		req.auth.login(user)
+		return req.redirect(to: "/")
+	}
+}
+```
+
+we register the routes, obviously
+
+```swift
+authSessionsRoutes.get("register", use: registerHandler)
+authSessionsRoutes.post("register", use: regsiterPostHandler)
+```
+
+now to show the register button in the nav-bar or not depending on the value of `userLoggedIn`
+
+```html
+#if(!userLoggedIn):
+	<li class="nav-item #if(title == "Register"): active #endif">
+		<a href="/register" class="nav-link">Register</a>
+	</li>
+#endif
 ```
 
 
