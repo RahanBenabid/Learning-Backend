@@ -1,8 +1,3 @@
-# some questions for myself
-- categories in acronym creation not working
-- need to understand the token thingy better, why include it in the web app and not in the RapidAPI yet it still works (i think just the /api endpoint makes it work like normal)
-- same question with the login
-
 # Vapor
 server side framework, apparently can also do frontend, you can create a project simply like this:
 Ensure Vapor is installed
@@ -1696,6 +1691,89 @@ now to show the register button in the nav-bar or not depending on the value of 
 #endif
 ```
 
+## Basic Validation
+Basically we create an extension that sets some rules and validate it later in the handler
+
+```swift
+extension RegisterData: Validitable {
+	static func validations(_ validations: inout Validations) {
+		validations.add("name", as: String.self, is: .ascii)
+		validations.add("username", as: String.self, is: .alphanumeric && .count(3...))
+		validations.add("password", as: String.self, is: .count(8...))
+	}
+}
+
+// validation later in the registerPostHandler
+do {
+	try RegisterData.validate(content: req)
+} catch {
+	return req.eventLoop.future(req.redirect(to: "/register"))
+}
+```
+
+custom validation are too complex for me for now, but here’s what the book does in general:
+1. First, they're creating a new type of validation result specifically for zip codes. This result will simply say whether a given string is a valid zip code or not.
+2. They're then adding some helpful messages to this result, like "is a valid zip code" for when it passes, and "is not a valid zip code" for when it fails.
+3. Next, they're creating the actual validator. This validator uses a regular expression (a special pattern) to check if a string matches the format of a US zip code.
+4. The regular expression they're using allows for two formats:
+	- Five digits (like 12345)
+	- Five digits, followed by a hyphen or space, then four more digits (like 12345-6789 or 12345 6789)
+5. They're then setting up the validator to use this regular expression. If a string matches the pattern, it's considered a valid zip code. If not, it's invalid.
+6. Finally, they're adding this new zip code validation to a list of validations for some kind of registration data. They're making it optional, meaning it won't cause an error if no zip code is provided, but if one is provided, it must be valid.
+
+## Display the error
+now that we made validation, we need to display what’s wrong when the user does something wrong, we just create an alert in the `/register.leaf`
+
+```html
+#if(message):
+  <div class="alert alert-danger" role="alert">
+    Please fix the following errors: <br />
+    #(message)
+  </div>
+#endif
+```
+
+add the message to the `RegisterContext` struct
+
+```swift
+let message: String?
+
+init(message: String? = nil) {
+	self.message = message
+}
+```
+
+then we include it in the *handler* and *post handler*
+
+```swift
+let context: RegisterContext
+if let message = req.query[String.self, at: "message"] {
+	context = RegisterContext(message: message)
+} else {
+	context = RegisterContext()
+}
+```
+
+if there is an error message, then include it in the context for the leaf View, next, when including it in the post handler, we extract the value of the message 
+
+```swift
+catch let error as ValidationsError {
+	let message =
+		error.description
+		.addingPercentEncoding(
+		withAllowedCharacters: .urlQueryAllowed
+		) ?? "Unknown error"
+	let redirect =
+		req.redirect(to: "/register?message=\(message)")
+	return req.eventLoop.future(redirect)
+}
+```
+
+The error message is included in the URL, if the description is not then it provides a default message
+
+# OAuth
+## Google OAuth
+just for better user experience, since some users don’t like to sign up (me included), so including OAuth in your website is essential 
 
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
