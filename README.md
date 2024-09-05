@@ -1,3 +1,8 @@
+# some questions for myself
+- categories in acronym creation not working
+- need to understand the token thingy better, why include it in the web app and not in the RapidAPI yet it still works (i think just the /api endpoint makes it work like normal)
+- same question with the login
+
 # Vapor
 server side framework, apparently can also do frontend, you can create a project simply like this:
 Ensure Vapor is installed
@@ -1504,6 +1509,118 @@ let context = IndexContext(
 That’s all there is to it
 
 # Cookies
+Cookies are an essential part of web development, often used for tasks such as authentication and displaying cookie consent messages. Below is a summary of how to manually handle cookies in a Vapor-based web application.
+
+#### Adding a Cookie Consent Message
+To add a cookie consent message to your site:
+1. **Edit the Template**: In `base.leaf`, add a conditional block that checks if the `showCookieMessage` flag is set. If true, it displays a footer with a cookie consent message.
+	```html
+	#if(showCookieMessage):
+	<footer id="cookie-footer">
+	    <div id="cookieMessage" class="container">
+	        <span class="muted">
+	            This site uses cookies! To accept this, click
+	            <a href="#" onclick="cookiesConfirmed()">OK</a>
+	        </span>
+	    </div>
+	</footer>
+	<script src="/scripts/cookies.js"></script>
+	#endif
+	```
+
+2. **Include Stylesheet**: Before the `<title>` tag in `base.leaf`, add a link to your custom stylesheet.
+	```html
+	<link rel="stylesheet" href="/styles/style.css">
+	```
+
+3. **Create and Style the Footer**: In `Public/styles/style.css`, add styling to pin the cookie message to the bottom of the page.
+	```css
+	#cookie-footer {
+	    position: absolute;
+	    bottom: 0;
+	    width: 100%;
+	    height: 60px;
+	    line-height: 60px;
+	    background-color: #f5f5f5;
+	}
+	```
+
+4. **Create JavaScript Function**: In `Public/scripts/cookies.js`, add a function that sets a cookie when the user clicks "OK", hiding the message and storing the consent for a year.
+	```javascript
+	function cookiesConfirmed() {
+	    $('#cookie-footer').hide();
+	    var d = new Date();
+	    d.setTime(d.getTime() + (365*24*60*60*1000));
+	    var expires = "expires=" + d.toUTCString();
+	    document.cookie = "cookies-accepted=true;" + expires;
+	}
+	```
+
+#### Managing the Cookie Consent Message
+
+In `WebsiteController.swift`:
+
+1. **Add a Flag**: Add `let showCookieMessage: Bool` to `IndexContext` to determine if the consent message should be displayed.
+2. **Check for Cookie**: In `indexHandler(_:)`, set the `showCookieMessage` flag based on whether the `cookies-accepted` cookie exists.
+	```swift
+	let showCookieMessage = req.cookies["cookies-accepted"] == nil
+	let context = IndexContext(
+	    title: "Home page",
+	    acronyms: acronyms,
+	    userLoggedIn: userLoggedIn,
+	    showCookieMessage: showCookieMessage
+	)
+	```
+
+This process ensures that the cookie consent message only appears when the user hasn't previously accepted the cookies.
+
+# Sessions
+we add this for mainly security measures, here is how it works:
+what we do is create a **Cross Site Request Forgery (CSRF)** token and send it in the form, here is a better explanation:
+-  the site generates a token for each form
+- the token is included in the form in a hidden field
+- the website checks if the token it generated matches the one being submitted, if they don’t match then the request will be rejected 
+- we do that by generating a token and storing it in the **User Session**
+- we pass it to the template **to be included in the form**
+
+we need to include the token in the acronym creation and then create it using a generator
+
+```swift
+struct CreateAcronymContext: Encodable {
+	// the other values
+	let csrfToken: String
+}
+
+// inside createAcronymHandler
+let token= [UInt8].random(count: 16).base64
+let context = CreateAcronymContext(csrfToken: token)
+// we save the token into the request's session data under the `CSRF_TOKEN` key
+req.session.data["CSRF_TOKEN"] = token
+```
+
+Now after the creation, we hold it in a hidden field, then extract it and compare it when submitted
+
+```swift
+#if(csrfToken):
+	<input type="hidden" name="csrfToken" value="#(csrfToken)">
+#endif
+```
+
+we compare the token (and reset it ofc, since each one is created in every request)
+
+```swift
+// in the CreateAcronymFormData, we should include the 
+
+let expectedToken = req.session.data["CSRF_TOKEN"]
+req.session.data["CSRF_TOKEN"] = nil
+guard 
+	let csrfToken = data.csrfToken,
+	expectedToken == csrfToken
+else {
+	throw Abort(.badRequest)
+}
+```
+
 
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
