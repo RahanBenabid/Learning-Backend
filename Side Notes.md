@@ -1,7 +1,4 @@
 # Some side notes for my Vapor project
-## Side Notes
-- the whole frontend is pretty much the `/WebsiteController.swift` file mixed with the `/Resources` folder
-- there are both the handlers that return a **View** and post handlers that return a **Response**
 
 ## Questions
 - need to understand the token thingy better, why include it in the web app and not in the RapidAPI yet it still works (i think just the /api endpoint makes it work like normal)
@@ -12,3 +9,9 @@
 - please fix the cookies footer
 - fix the register showing up when you’re not in the home folder
 - categories in acronym creation not working
+
+## Side Notes
+- the whole frontend is pretty much the `/WebsiteController.swift` file mixed with the `/Resources` folder
+- there are both the handlers that return a **View** and post handlers that return a **Response**
+- URL vs URI, URL is a specific URI that tells you how to access the resource, where URI is a string that identifies a resource, URI identifies a resource by either *Location (URL)* or *name (URN)*, the terms between URL and URI are interchangeable since all URLs are URIs
+

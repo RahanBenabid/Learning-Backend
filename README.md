@@ -1775,7 +1775,119 @@ The error message is included in the URL, if the description is not then it prov
 ## Google OAuth
 just for better user experience, since some users don’t like to sign up (me included), so including OAuth in your website is essential, here is how the OAuth works… pretty much
 
+![][image-1]
+
+You click the login with Google, you authorise the app to access the google data that it needs (everything that it will access will be displayed), once you authorise it, google will give the App a *token*, which the app will use to authenticate requests to google APIs, this is pretty much what we’re going to implement
+
+The heavy lifting here will be done using a package called **Imperial** (all the things you see in the graph above, they will be simplified), it not only has Google API integration but also *Facebook* and *GitHub*, and more, to set up Imperial we just include it in the dependencies and then the `/routes.swift`
+
+```swift
+.package(url: "https://github.com/vapor-community/Imperial.git", from: "1.2.0")
+/*
+*/
+.product(name: "ImperialGoogle", package: "Imperial")
+
+// in routes.swift
+let imperialController = ImperialController()
+try app.register(collection: imperialController)
+```
+
+We create its controller that is empty for now, now the annoying part, we set up the app with Google
+- create a project in [console.developers.google.com/apis/credentials][7]
+- create an OAuth credential
+- set the email and all that shit
+- set the *scopes* of the app… what it will ask of the user. This gives you access to the user’s email and profile which you need to create an account in the TIL app.
+- next when setting the URI, add [http://localhost:8080/oauth/google][8]
+- save the **client ID** and **client secret**
+
+Now integrating Imperial, we set up the function that handler the Google login, this one runs after the Google login and accord, it will be a simple redirect for now, we will change it later
+
+```swift
+@Sendable func processGoogleLogin(request: Request, token: String) throws -> EventLoopFuture<ResponseEncodable> {
+	request.eventLoop.future(request.redirect(to: "/"))
+}
+```
+
+now we set up the route
+
+```swift
+guard let googleCallbackURL =
+	Environment.get("GOOGLE_CALLBACK_URL") else {
+		fatalError("Google callback URL not set")
+}
+try routes.oAuth(
+	from: Google.self,
+	authenticate: "login-google",
+	callback: googleCallbackURL,
+	scope: ["profile", "email"],
+	completion: processGoogleLogin)
+```
+
+next we provide the `clientID` and `client secret`, using an environment variable, for making this work, you need to set a custom directory in the Xcode settings, and then write all your secret variables inside the `/.env` file, now for the logic and a good UX, you need to create a new user when he logs in with his google account
+Now we setup two things, the content that we want from the Google API, and the function that **connects** to the google api
+
+```swift
+struct GoogleUserInfo: Content {
+	let email: String
+	let name: String
+}
+
+extension Google {
+	static func getUser(on request: Request) throws -> EventLoopFuture<GoogleUserInfo> {
+		var headers = HTTPHeaders()
+		headers.bearerAuthorization = try BearerAuthorization(token: request.accessToken())
+		let googleAPIURL: URI = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
+		return request
+			.client
+			.get(googleAPIURL, headers: headers)
+			.flatMapThrowing { response in
+				guard response.status == .ok else {
+					if response.status == .unauthorized {
+						throw Abort.redirect(to: "/login-google")
+					} else {
+						throw Abort(.inernalServerError)
+					}
+				}
+				return try response.content.decode(GoogleUserInfo.self)
+			}
+	}
+}
+```
+
+This function will fetch the user infos using the access token, and handles the possible errors during the process, now back to the function that we wrote earlier 
+
+```swift
+try Google
+	.getUser(on: Request)
+	.flatMap { userInfo in
+		User
+			.query(on: request.db)
+			.filter(\.$username == userInfo.email)
+			.first()
+			.flatMap { foundUser in
+				guard let existingUser = foundUser else {
+					let user = User(
+					name: userInfo.name,
+					username: userInfo.email,
+					password: UUID().uuidString)
+					return user.save(on: request.db).map {
+						request.session.authenticate(user)
+						return request.rediret(to: "/")
+					}
+				}
+				request.session.authenticate(existingUser)
+				return request.eventLoop. future(request.redirect(to: "/")
+			}
+	}
+```
+
+This function is very simple, it executes after the authentication, and the user gave permission, then 
+
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
 [3]:	http://127.0.0.1:8080
 [6]:	http://127.0.0.1:8080/api/users/login
+[7]:	console.developers.google.com/apis/credentials
+[8]:	http://localhost:8080/oauth/google
+
+[image-1]:	images/sequenceDiagram%202024-09-05%20at%2010.35.38.png
