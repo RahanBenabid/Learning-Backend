@@ -19,10 +19,10 @@ then simply open your project with Xcode, it will download the dependencies
 ## Swift Package Manager
 similar to CocoaPods in IOS, notice how you can run the Xcode project without the Xcode project template, because when using SPM it will create a workspace in a hidden folder, the dependencies are declared in the `Package.swift` file with the target, and how they link together
 
-setting up endpoints is mostly the same as for node, here is a code that takes a parameter from the url, and handles errors then, returns a string 
+setting up endpoints is mostly the same as for node, here is a code that takes a parameter from the url, and handles errors then, returns a string
 
 ```swift
-app.get("hello", ":name") { req -> String in 
+app.get("hello", ":name") { req -> String in
   guard let name = req.parameters.get("name") else {
 	throw Abort(.internalServerError)
   }
@@ -42,7 +42,7 @@ struct InfoResponse: Content {
   let request: String
 }
 
-app.post("info") { req -> InfoResponse in 
+app.post("info") { req -> InfoResponse in
   let data = try req.content.decode(InfoData.self)
   return InfoResponse(request: data)
 ```
@@ -77,7 +77,7 @@ Representational State Transfer, the core of many web applications, lets you def
 - `DELETE /api/acronyms/1` delete the acronym with the ID 1
 
 # Async
-This concept is important because it lets us run multiple threads at a time, instead of trying to fetch something and it puts the whole website on pause, in an asynchronous server, these requests that take time will be put to side until the fetching is complete. 
+This concept is important because it lets us run multiple threads at a time, instead of trying to fetch something and it puts the whole website on pause, in an asynchronous server, these requests that take time will be put to side until the fetching is complete.
 To put it aside until it resolves, we must put wrap it in a **promise**, here is some Vapor code of a synchronous vs async operation:
 
 ```swift
@@ -118,11 +118,11 @@ used when you only care that the future completed and not the result
 
 ```swift
 return database.getAllUsers().flatMap { users in
-  let user = users[0] 
-  user.name = "Bob" 
-  return user 
-	.save(on: req.db) 
-	.transform(to: HTTPStatus.noContent) 
+  let user = users[0]
+  user.name = "Bob"
+  return user
+	.save(on: req.db)
+	.transform(to: HTTPStatus.noContent)
 }
 ```
 
@@ -195,18 +195,18 @@ import Vapor
 
 final class Todo: Model {
     static let schema = "todos"
-    
+
     @ID(key: .id)
     var id: UUID?
-    
+
     @Field(key: "title")
     var title: String
-    
+
     @Field(key: "isComplete")
     var isComplete: Bool
-    
+
     init() { }
-    
+
     init(id: UUID? = nil, title: String, isComplete: Bool = false) {
         self.id = id
         self.title = title
@@ -254,7 +254,7 @@ It is done using the wrapper `Content`, and creating the endpoint obviously, and
 ```
 
 # Databases
-The database used for the project is specified in the `package.swift` and the database configuration happens in `Sources/App/configure.swift` 
+The database used for the project is specified in the `package.swift` and the database configuration happens in `Sources/App/configure.swift`
 - first import the driver
 - configure it depending on your db, for example an in-memory SQLite, or setting up the host password, user name and all
 
@@ -341,7 +341,7 @@ and to use all of what you wrote you need to correctly setup `routes.swift` like
 let acronymsController = AcronymsController()
 try app.register(collection: acronymsController)
 ```
- 
+
 This way your code is more organised, and your app will stay rideable even if your app gets bigger since everything is separated
 
 # Parent-Child Relationships
@@ -379,7 +379,7 @@ wrapper. The column type, uuid, matches the ID column type from CreateUser.
 
 ## Domain-Transfer-Object
 used to simplify the request, and basically represents what a client should send or receive, good to use when you’re dealing with complex data structure, it’s just a simple way of sending and receiving data between the server and client, it’s just a property that holds data. it packages (compresses multiple pieces of data together so that we can only transfer what’s important.
-change the controller and add the DTO 
+change the controller and add the DTO
 
 ```swift
 struct CreateAcronymData: Content {
@@ -394,7 +394,7 @@ and change the model create handler for the database *(don’t forget the update
 ```swift
 @Sendable func createHandler(_ req: Request) throws -> EventLoopFuture<Acronym> {
 		let data = try req.content.decode(CreateAcronymData.self)
-		
+
 		let acronym = Acronym(
 			short: data.short,
 			long: data.long,
@@ -449,7 +449,7 @@ and the migration:
 
 note that it is good practice to use **foreign key** constraints with sibling relationships too. if we don’t we can for example, delete acronyms and categories that are still linked by the pivot and the
 relationship will remain, without flagging an error.
-now we add to the migration list 
+now we add to the migration list
 
 ```swift
 app.migrations.add(CreateAcronymCategoryPivot())
@@ -529,13 +529,13 @@ this will be used to test the Users, we import the necessary modules, now we wri
 func testUserCanBeRetrievedFromAPI() throws {
 	let expectedName = "Alice"
 	let expectedUsername = "alice"
-	
+
 	let app = Application(.testing)
-	
+
 	defer { app.shutdown() }
-	
+
 	try configure(app)
-	
+
 	let user = User(
 		name: expectedName,
 		username: expectedUsername)
@@ -543,19 +543,19 @@ func testUserCanBeRetrievedFromAPI() throws {
 	try User(name: "Luke", username: "lukes")
 		.save(on: app.db)
 		.wait()
-	
+
 	try app.test(.GET, "/api/users", afterResponse: { response in
-		
+
 		XCTAssertEqual(response.status, .ok)
-		
+
 		let users = try response.content.decode([User].self)
-		
+
 		XCTAssertEqual(users.count, 2)
 		XCTAssertEqual(users[0].name, expectedName)
 		XCTAssertEqual(users[0].username, expectedUsername)
 		XCTAssertEqual(users[0].id, user.id)
-	})	
-}  
+	})
+}
 ```
 
 these are a bunch of basic tests that will create 2 users and see if they get saved, now we need to set up the `configure.swift` to use a different environment, one in running the app and one in testing
@@ -588,7 +588,7 @@ try app.autoRevert().wait()
 try app.autoMigrate().wait()
 ```
 
-now logically we should test all the endpoints, so instead of writing that MASSIVE chunk of code each time, we create a reusable piece of code, see the Xcode project, we built `Application+Testable.swift` and `Models+Testable.swift` to be able to reuse the code later, than created a test for each endpoint. 
+now logically we should test all the endpoints, so instead of writing that MASSIVE chunk of code each time, we create a reusable piece of code, see the Xcode project, we built `Application+Testable.swift` and `Models+Testable.swift` to be able to reuse the code later, than created a test for each endpoint.
 In `Models+Testable.swift` we create all the models we’re going to use for testing, for example when retrieving an acronym from the user, we should create a new Model inside it like such
 
 ```swift
@@ -600,11 +600,11 @@ extension Acronym {
 		on database: Database
 	) throws -> Acronym {
 		var acronymUser = user
-		
+
 		if acronymUser == nil {
 			acronymUser = try User.create(on: database)
 		}
-		
+
 		let acronym = Acronym(short: short, long: long, userID: acronymUser!.id!)
 		try acronym.save(on: database).wait()
 		return acronym
@@ -620,7 +620,7 @@ what we’re going to do is have two separate apps, Our previous app we built al
 
 To create an iOS app that performs the crud operations that we built:
 - We create a model structure that matches ours, the fact that we built the backend in the same language helps immensely, this was (just like in Vapor) made inside the `/Models` folder
-- create the network service that handles the API using the `Foundation` module 
+- create the network service that handles the API using the `Foundation` module
 - create a way to fetch all instances of a particular resource type (we implemented the `getAll()` function inside the `ResourceRequest.swift`), it gets all the values from the API, here is the function:
 
 ```swift
@@ -709,7 +709,7 @@ override func tableView(
 		let acronymDetailRequester = AcronymRequest(acronymID: id)
 		acronymDetailRequester.delete()
 	}
-	
+
 	// remove the acronym from the local array of acronyms
 	acronyms.remove(at: indexPath.row)
 	// remove the acronym row from the table view
@@ -735,10 +735,10 @@ We first need to implement the `save(_:)`:
 			on: self) // Present the error on the current view controller
 		return // Exit the function if the name is invalid
 	}
-	
+
 	// Create a new Category object with the specified name
 	let category = Category(name: name)
-	
+
 	// Create a ResourceRequest for the "categories" endpoint and save the new category
 	ResourceRequest<Category>(resourcePath: "categories")
 		.save(category) { [weak self] result in // Save the category and handle the result
@@ -771,7 +771,7 @@ Now we must add the ability to add an acronym to the category:
 func loadData() {
 	// Create a ResourceRequest for the "categories" endpoint
 	let categoriesRequest = ResourceRequest<Category>(resourcePath: "categories")
-	
+
 	// Perform a request to get all categories
 	categoriesRequest.getAll { [weak self] result in
 		// Handle the result of the request
@@ -780,11 +780,11 @@ func loadData() {
 			// If the request fails, show an error message
 			let message = "There was an error getting the categories"
 			ErrorPresenter.showError(message: message, on: self) // Present the error on the current view controller
-			
+
 		case .success(let categories):
 			// If the request is successful, store the retrieved categories
 			self?.categories = categories
-			
+
 			// Update the UI on the main thread
 			DispatchQueue.main.async { [weak self] in
 				// Reload the table view to display the new categories
@@ -806,16 +806,16 @@ func add(
     completion(.failure(.noID)) // Return an error if no ID is found
     return
   }
-  
+
   // Construct the URL for the POST request
   let url = resource
     .appendingPathComponent("categories") // Add "categories" to the path
     .appendingPathComponent("\(categoryID)") // Add the category ID to the path
-  
+
   // Create a URLRequest for the specified URL
   var urlRequest = URLRequest(url: url)
   urlRequest.httpMethod = "POST" // Set the HTTP method to POST
-  
+
   // Create a data task to send the request
   let dataTask = URLSession.shared
     .dataTask(with: urlRequest) { _, response, _ in
@@ -827,17 +827,17 @@ func add(
         completion(.failure(.invalidResponse)) // Return an error for invalid response
         return
       }
-      
+
       // If the request is successful, call the completion handler with success
       completion(.success(()))
     }
-  
+
   // Start the data task
   dataTask.resume()
 }
 ```
 
- and now the final part:  
+ and now the final part:
 
 ```swift
 extension AddToCategoryTableViewController {
@@ -848,7 +848,7 @@ extension AddToCategoryTableViewController {
   ) {
     // 1: Get the selected category from the categories array using the selected row index
     let category = categories[indexPath.row]
-    
+
     // 2: Check if the acronym has a valid ID
     guard let acronymID = acronym.id else {
       // If the acronym has no ID, show an error message
@@ -859,10 +859,10 @@ extension AddToCategoryTableViewController {
       ErrorPresenter.showError(message: message, on: self) // Present the error on the current view controller
       return // Exit the function if the acronym ID is invalid
     }
-    
+
     // 3: Create an AcronymRequest object to manage the request for adding the acronym to the category
     let acronymRequest = AcronymRequest(acronymID: acronymID)
-    
+
     // Call the add method on the acronymRequest to add the selected category
     acronymRequest.add(category: category) { [weak self] result in
       // Handle the result of the add operation
@@ -874,7 +874,7 @@ extension AddToCategoryTableViewController {
           self?.navigationController?
             .popViewController(animated: true)
         }
-        
+
         // 5: If there was a failure in adding the acronym to the category
       case .failure:
         // Show an error message indicating the failure
@@ -933,7 +933,7 @@ let websiteController = WebsiteController()
 try app.register(collection: websiteController)
 ```
 
-and in the `configure.swift`, write 
+and in the `configure.swift`, write
 
 ```swift
 app.views.use(.leaf)
@@ -1071,7 +1071,7 @@ in the project, we ended up creating the acronym table twice, in the Front page 
 ```
 
 # Creating/Modifying models
-The goal now is to create an acronym IN the interface, for that we should implement *two routes*: 
+The goal now is to create an acronym IN the interface, for that we should implement *two routes*:
 - handle a **GET** request to display the form the user will fill
 - handle the **POST** request after the user submits their acronym
 For the GET part, we need to display the list of users, so that the user can select which one created the acronym, pretty dumb but we’ll so it like this for now, just create a handler that sends a list of users
@@ -1081,21 +1081,21 @@ Now for the POST request… the code handles the creation of a new acronym by de
 @Sendable func createAcronymPostHandler(_ req: Request) throws -> EventLoopFuture<Response> {
     // Decode the request content into a CreateAcronymData struct
     let data = try req.content.decode(CreateAcronymData.self)
-    
+
     // Create a new Acronym instance with the data from the request
     let acronym = Acronym(
         short: data.short,
         long: data.long,
         userID: data.userID
     )
-    
+
     // Save the new acronym to the database
     return acronym.save(on: req.db).flatMapThrowing {
         // Ensure the ID is set after saving, or else throw a server error
         guard let id = acronym.id else {
             throw Abort(.internalServerError)
         }
-        
+
         // Redirect the user to the newly created acronym's page
         return req.redirect(to: "/acronyms/\(id)")
     }
@@ -1192,7 +1192,7 @@ extension EventLoopFuture where Value == Array<User> {
 	}
 }
 ```
- 
+
 then in all the handlers, we will return a `User.Public` and use the `. convertToPublic()` method
 
 ```swift
@@ -1221,16 +1221,16 @@ the header will be
 Authorization: Basic dGltYzpwYXNzd29yZA==
 ```
 
-Vapor, already has built-in HTTP Auth, first we add method will be using to conform the User to the HTTP Auth protocol, we will tell Vapor which fields to use when making authentication 
+Vapor, already has built-in HTTP Auth, first we add method will be using to conform the User to the HTTP Auth protocol, we will tell Vapor which fields to use when making authentication
 
 ```swift
 // The ModelAuthenticable will allow Fluent models to use the HTTP Auth
 extension User: ModelAuthenticatable {
-	
+
 	// tells fluents the username and password path
 	static let usernameKey = \User.$username
 	static let passwordHashKey = \User.$password
-	
+
 	// very the hash here (you hash the input password and compare the result with the db hash)
 	func verify(password: String) throws -> Bool {
 		try Bcrypt.verify(password, created: self.password)
@@ -1258,7 +1258,7 @@ acronymsRoutes.post(use: createHandler)
 
 > Middleware allows you to intercept requests and responses in your application. In this example, basicAuthMiddleware intercepts the request and authenticates the user supplied.
 
-Now, a POST request to [http://localhost:8080/api/acronyms]() will respond with a **401 unauthorised**, unless you add an Auth **username and password**, and now, only authenticated users can create an acronym. And now for better quality of life, we should let the users 
+Now, a POST request to [http://localhost:8080/api/acronyms]() will respond with a **401 unauthorised**, unless you add an Auth **username and password**, and now, only authenticated users can create an acronym. And now for better quality of life, we should let the users
 
 # Login
 this way, you just exchange their credentials for a token they can use, it’s generated by the server upon successful authentication so that they don’t need to provide their credentials again. We simply start by creating the Token model in the `/Models` folder, it contains the `id`, `value`, and the `userID` fields, we do the rest of the work in the `/Migration` folder and `/Configure.swift` file, the usual for any model, now…
@@ -1352,14 +1352,14 @@ struct CreateAdminUser: Migration {
 		} catch {
 			return database.eventLoop.future(error: error)
 		}
-		
+
 		let user = User(
 			name: "Admin",
 			username: "admin",
 			password: passwordHash)
 		return user.save(on: database)
 	}
-	
+
 	func revert(on database: any Database) -> EventLoopFuture<Void> {
 		User.query(on: database)
 			.filter(\.$username == "admin")
@@ -1453,8 +1453,8 @@ and we create another group that includes redirects for users, they are used for
 let protectedRoutes = authSessionsRoutes.grouped(User.redirectMiddlware(path: "login"))
 ```
 
-underneath this one, we register the routes that require protection such as ** creating, editing and deleting acronyms**  
-If the user tries to connect 
+underneath this one, we register the routes that require protection such as ** creating, editing and deleting acronyms**
+If the user tries to connect
 ### Updating the site
 now since the users who can create and delete and all must already be authenticated, we no longer need to include the `userID` in `CreateAcronymData`, we remove it and replace the content of `createAcronymPostHandler(_:data:)` and the `editAcronymPostHandler()`, so in both we add the lines
 
@@ -1471,7 +1471,7 @@ acronym.$user.id = userID
 
  next we remove where the user is mentioned (the `<div>` in `/createAcronym.leaf` and the `createAcronymContext` function
 
-> Note that the session right now is kept in memory, so every time you restart the project, you need to login again 
+> Note that the session right now is kept in memory, so every time you restart the project, you need to login again
 
 ### Log Out
 that one is really simple, we create the handler, the route and the `.leaf` template in top if `/base.leaf`
@@ -1574,7 +1574,7 @@ we add this for mainly security measures, here is how it works:
 what we do is create a **Cross Site Request Forgery (CSRF)** token and send it in the form, here is a better explanation:
 -  the site generates a token for each form
 - the token is included in the form in a hidden field
-- the website checks if the token it generated matches the one being submitted, if they don’t match then the request will be rejected 
+- the website checks if the token it generated matches the one being submitted, if they don’t match then the request will be rejected
 - we do that by generating a token and storing it in the **User Session**
 - we pass it to the template **to be included in the form**
 
@@ -1604,11 +1604,11 @@ Now after the creation, we hold it in a hidden field, then extract it and compar
 we compare the token (and reset it ofc, since each one is created in every request)
 
 ```swift
-// in the CreateAcronymFormData, we should include the 
+// in the CreateAcronymFormData, we should include the
 
 let expectedToken = req.session.data["CSRF_TOKEN"]
 req.session.data["CSRF_TOKEN"] = nil
-guard 
+guard
 	let csrfToken = data.csrfToken,
 	expectedToken == csrfToken
 else {
@@ -1644,13 +1644,13 @@ struct RegisterContext: Encodable {
 	let title = "Register"
 }
 
-// 
+//
 func registerHandler(_ req: Request) -> EventLoopFuture<View> {
 	let context = RegisterContext()
 	return req.view.render("register", context)
 }
 
-// 
+//
 struct RegisterData: Content {
 	let name: String
 	let username: String
@@ -1754,7 +1754,7 @@ if let message = req.query[String.self, at: "message"] {
 }
 ```
 
-if there is an error message, then include it in the context for the leaf View, next, when including it in the post handler, we extract the value of the message 
+if there is an error message, then include it in the context for the leaf View, next, when including it in the post handler, we extract the value of the message
 
 ```swift
 catch let error as ValidationsError {
@@ -1773,7 +1773,7 @@ The error message is included in the URL, if the description is not then it prov
 
 # OAuth
 ## Google OAuth
-just for better user experience, since some users don’t like to sign up (me included), so including OAuth in your website is essential 
+just for better user experience, since some users don’t like to sign up (me included), so including OAuth in your website is essential, here is how the OAuth works… pretty much
 
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
