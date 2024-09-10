@@ -1881,7 +1881,7 @@ try Google
 	}
 ```
 
-This function is very simple, it executes after the authentication, and the user gave permission, then 
+This function is very simple, it executes after the authentication, and the user gave permission, then it does one of two things, match the user in the database, then if it matches, simply authenticate and redirect him in the `request.session.authenticate(existingUser)` line, or create a new user, set the name as the name that you got from the API, the username as the username you got from the API, and set a random password using `UUID()`, the password will be unknown so that we make sure the user does not login using it.
 
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
