@@ -17,5 +17,4 @@
 - URL vs URI, URL is a specific URI that tells you how to access the resource, where URI is a string that identifies a resource, URI identifies a resource by either *Location (URL)* or *name (URN)*, the terms between URL and URI are interchangeable since all URLs are URIs
 
 
-
 [1]:	console.developers.google.com/apis/credentials

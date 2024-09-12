@@ -1883,6 +1883,26 @@ try Google
 
 This function is very simple, it executes after the authentication, and the user gave permission, then it does one of two things, match the user in the database, then if it matches, simply authenticate and redirect him in the `request.session.authenticate(existingUser)` line, or create a new user, set the name as the name that you got from the API, the username as the username you got from the API, and set a random password using `UUID()`, the password will be unknown so that we make sure the user does not login using it.
 
+## GitHub OAuth
+This one is pretty much the same as the google on, we set the dependency, we import it, then define the  `processGitHubLogin()` routes, and the `struct` and `extension` in the `/ImperialController.swift` and set the **Client ID**  and **Client Secret** inside the `/.env` file. after that we add the `<a>` tag inside the Leaf file and TADA! everything works, the code is almost as similar as the Google one, except the struct which looks like this
+
+```swift
+struct GitHubUserInfo: Content {
+	let name: String
+	let login: String
+}
+```
+
+and the header that is more specific
+
+```swift
+var headers = HTTPHeaders()
+try headers.add(
+	name: .authorization,
+	value: "token \(request.accessToken())")
+headers.add(name: .userAgent, value: "vapor")
+```
+
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
 [3]:	http://127.0.0.1:8080
