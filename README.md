@@ -1884,7 +1884,7 @@ try Google
 This function is very simple, it executes after the authentication, and the user gave permission, then it does one of two things, match the user in the database, then if it matches, simply authenticate and redirect him in the `request.session.authenticate(existingUser)` line, or create a new user, set the name as the name that you got from the API, the username as the username you got from the API, and set a random password using `UUID()`, the password will be unknown so that we make sure the user does not login using it.
 
 ## GitHub OAuth
-This one is pretty much the same as the google on, we set the dependency, we import it, then define the  `processGitHubLogin()` routes, and the `struct` and `extension` in the `/ImperialController.swift` and set the **Client ID**  and **Client Secret** inside the `/.env` file. after that we add the `<a>` tag inside the Leaf file and TADA! everything works, the code is almost as similar as the Google one, except the struct which looks like this
+This one is pretty much the same as the google one, we set the dependency, we import it, then define the  `processGitHubLogin()` routes, and the `struct` and `extension` in the `/ImperialController.swift` and set the **Client ID**  and **Client Secret** inside the `/.env` file. after that we add the `<a>` tag inside the Leaf file and TADA! everything works, the code is almost as similar as the Google one, except the struct which looks like this
 
 ```swift
 struct GitHubUserInfo: Content {
@@ -1902,6 +1902,102 @@ try headers.add(
 	value: "token \(request.accessToken())")
 headers.add(name: .userAgent, value: "vapor")
 ```
+
+(Don’t forget to check the iOS app too, I updated it but it’s still the same thing as the Google one
+
+## Apple OAuth
+When using the other OAuth, it’s just good to also add the apple authentication, since it has its privacy benefits, like hiding the real name or email, the downside is that for setting that up i **need a paid apple developer account**, i’m gonna write the code nonetheless even if it won’t work, here’s how the process works:
+- use the `ASAuthorizationAppleIDButton` to show the button, clicking it will make you got through the sign in process 
+- it will return a `ASAuthorizationAppleIDCredential` that contains a **JWT** 
+- it will send the JWT to the server that should validate it
+- if valid, it will either create a new user or login an existing one
+- the last step is returning a Token to the iOS app
+
+#### JWT
+are a way of transmitting data between parties, they contain *JSON*, so any info can be sent within them, the side who created the JWT sign the token with a secret, it also contains a header, using these two you can verify the integrity of your token, if it’s real and valid, in our example, the server gets the token and the public key to verify the token is valid
+
+So knowing all of this, now we should add the module that handles the JWT in vapor, in the `/Package.swift` we add a new package this time 
+
+```swift
+.package(url: "https://github.com/vapor/jwt.git", from: "4.2.2")
+// later in the file
+.product(name: "JWT", package: "jwt")
+```
+
+next we add the *Sign In With Apple identifier* in the User model, and this field will be optional, since we don’t want the user to only Sign In using apple
+
+```swift
+@OptionalField(key: "siwaIdentifier")
+var siwaIdentifier: String?
+
+// add it to the init later
+init(..., siwaIdentifier: String? = nil) {
+	/*...*/
+	self.siwaIdentifier = siwaIdentifier
+}
+```
+
+also in the `/CreateUser.swift`
+
+```swift
+.field("siwaIdentifier", .string)
+```
+
+> WILL LEAVE IT FOR LATER BECAUSE THE PROCESS IS LONG AND I CAN’T EVEN INTEGRATE IT WITHOUT BREAKING MY APP (i don’t have a paid apple dev account)
+
+# Email & Password Reset
+Not only we will add emails in the database, we will also add a service to send emails to users, later… for now we will be able to *reset passwords*, so first off we change the *User* structure in the database
+
+```swift
+@Field(key: "email")
+var email: String
+```
+
+And include it in the **initialiser** and not the public one, because it’s always good practice to keep the email hidden, unless required
+
+```swift
+init(..., email: String? = nil) {
+	/*...*/
+	self.email = email
+}
+
+// in CreateUser.swift
+.field("email", .string, .required)
+.unique(on: "email")
+
+// in CreateAdminUser.swift
+let user = User(
+	name: "Admin",
+	username: "admin",
+	password: passwordHash,
+	email: "admin@localhost.local")
+```
+
+After that, we easily fix the following to better match the new user model:
+
+- `/WebsiteController.swift`:
+	- `RegisterData` 
+	- `RegisterPostHandler(data)`
+	- the validation extension to require the email
+- `/ImperialController.swift`
+	- `processGoogleLogin`
+	-  routes in the Github part, as well as creating the `getEmails()` function that is very similar to the `getUser()` one
+	- modify the `processGitHubLogin` function, this one is interesting because you chain two function using the `.and(EventLoopFuture<OtherValue>)` method
+- fix the tests, not interested 
+- fix the iOS app, also not interested
+Don’t forget resetting the *Docker* db
+
+```bash
+docker rm -f postgres
+docker run --name postgres \
+	-e POSTGRES_DB=vapor_database \
+	-e POSTGRES_USER=vapor_username \
+	-e POSTGRES_PASSWORD=vapor_password \
+	-p 5432:5432 -d postgres
+```
+
+## Sending Emails to the user
+Now to be able to reset the password, you need to be able to send an email to the user, so we need to create that process using *SendGrid*
 
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080

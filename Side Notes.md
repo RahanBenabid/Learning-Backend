@@ -15,6 +15,9 @@
 - the whole frontend is pretty much the `/WebsiteController.swift` file mixed with the `/Resources` folder
 - there are both the handlers that return a **View** and post handlers that return a **Response**
 - URL vs URI, URL is a specific URI that tells you how to access the resource, where URI is a string that identifies a resource, URI identifies a resource by either *Location (URL)* or *name (URN)*, the terms between URL and URI are interchangeable since all URLs are URIs
+- *Flaws in the app:* 
+	- if the user that signed in using GitHub, somehow has a login the same as the google email what would happen, what also would happen if i already have an the same as the google one and use the google OAuth, in fact, i’ll go check right now… the username cannot contain `@` hehe, i knew it ofc, and i def did not forget the rules I wrote myself
+
 
 
 [1]:	console.developers.google.com/apis/credentials
