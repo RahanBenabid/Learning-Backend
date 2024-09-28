@@ -1999,6 +1999,152 @@ docker run --name postgres \
 ## Sending Emails to the user
 Now to be able to reset the password, you need to be able to send an email to the user, so we need to create that process using *SendGrid*
 
+## Profile Picture
+This chapter is unique because this time, instead of sending data like JSON or simple text, we’ll learn how to send files in the request, in this case to be able to upload a profile picture
+
+> in this case, we’ll upload the files to the server where the Vapor app resides, for a real app, the files need to be sent to a storage service, one example would be AWS S3 or Heroku (not recommended) 
+
+For starters, we just need to add a field to the user model, this one needs to be optional
+
+```swift
+@OptionalField(key: "profilePicture")
+var profilePicture: String?
+```
+
+We add it to the initialised and all, it will contain the filename of the pfp, note that the GitHub and Google API can be used to retrieve the user pfp, also the pfp upload will be separate from the register. Now we add the field to create user, without adding the unique constraint
+
+```swift
+.field("profilePicture", .string)
+```
+
+then handle everything in `/WebsiteController.swift`
+
+```swift
+func addProfilePictureHandler(_ req: Request) -> EventLoopFuture<View> {
+	User.find(req.parameters.get("userID"), on: req.db)
+		.unwrap(or: Abort(.notFound)).flatMap { user in
+			req.view.render("addProfilePicture", ["title": "Add Profile Picture", "username": user.name])
+		}
+}
+```
+
+Now we add the route in `boot()` and create the leaf file, nothing crazy here, next we modify the `UserContext`, since we now need a new link for the users to be able to access the new form
+Now, what we need to do is, when the user visits his page and is authenticated, we need to show a *add profile picture* input, to be able to either upload or update his pfp, we change the `UserContext`
+
+```swift
+let authenticatedUser: User?
+```
+
+change the context in the `userHandler()`
+
+```swift
+// get the authenticated user from the Request's authentication cash
+let loggedInUser = req.auth.get(User.self)
+// pass it to the context, it's optional
+let context = UserContext(..., authenticatedUser: loggedInUser)
+```
+
+then in the `/user.leaf` file, we show the **Update/Upload** button if the user is logged in
+Now for the image upload part, it’s not that hard since Swift will do the heavy-lifting 
+
+We create a folder that will contain all the profile pictures
+
+```bash
+# in the project root
+mkdir ProfilePictures
+touch ProfilePictures/.keep
+```
+
+then create the struct that will contain the image
+
+```swift
+struct ImageUploadData: Content {
+	var picture: Data
+}
+```
+
+then define the image folder
+
+```swift
+let imageFolder = "ProfilePictures/"
+```
+
+and now of course, the post handler, what it will do is, decode the image, then store it using the `NIO` file functionality in the folder we created, then with the same name create a field for the user.
+
+```swift
+@Sendable func addProfilePicturePostHandler(_ req: Request) throws ->  EventLoopFuture<Response> {
+	// decode the request body (out image) into ImageUploadData
+	let data = try req.content.decode(ImageUploadData.self)
+	// search for the user
+	return User.find(req.parameters.get("userID"), on: req.db)
+		.unwrap(or: Abort(.notFound))
+		.flatMap { user in
+			// get the userID and handle the errors
+			let userID: UUID
+			do {
+				userID = try user.requireID()
+			} catch {
+				return req.eventLoop.future(error: error)
+			}
+			// create a name for your file
+			let name = "\(userID)-\(UUID()).jpg"
+			// setup the file using the root directory + image folder + name we just created
+			let path = req.application.directory.workingDirectory + imageFolder + name
+			// save the file on the disk
+			return req.fileio
+				.writeFile(.init(data: data.picture), at: path)
+				.flatMap {
+					// update the profile picture name in the user field
+					user.profilePicture = name
+					// save the user then redirect
+					let redirect = req.redirect(to: "/users/\(userID)")
+					return user.save(on: req.db).transform(to: redirect)
+				}
+		}
+}
+```
+
+and now a very weird part, when registering the route, we’re not gonna use `.post` or `.get`, instead we’ll use `.on`
+
+```swift
+protectedRoutes.on(.POST, "users", "userID", "addProfilePicture", body: .collect(maxSize: "10mb"), use: addProfilePicturePostHandler)
+```
+
+it still is a POST request, but vapor limits the body collection to 16KB, and  this gets rid of this problem and allows a limit of 10MB  instead
+
+This is all there is to **save** the image, now to **serve** it is another story, jk it’s not that hard, just create a handler, its route and modify the `/user.leaf`
+The handler will just get the picture using the filename which is already stored in the user field
+
+```swift
+func getUsersProfilePictureHandler( _ req: Request) -> EventLoopFuture<Response> {
+	User.find(req.parameters.get("userID"), on: req.db)
+		.unwrap(or: Abort(.notFound))
+		.flatMapThrowing { user in
+		guard let filename = user.profilePicture else {
+			throw Abort(.notFound)
+		}
+		let path = req.application.directory
+			.workingDirectory + imageFolder + filename
+		return req.fileio.streamFile(at: path)
+	}
+}
+```
+
+```swift
+authSessionsRoutes.get(
+	"users"
+	":userID"
+	"profilePicture"
+	use: getUsersProfilePictureHandler)
+```
+
+```swift
+#if(user profilePicture):
+	<img src="/users/#(user.id)/profilePicture"
+	alt="#(user.name) ">
+#endif
+```
+
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
 [3]:	http://127.0.0.1:8080
