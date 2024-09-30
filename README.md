@@ -2212,8 +2212,80 @@ app.migrations.add(AddTwitterURLToUser())
 ```
 
 Now the user model has a new null `twitterURL` field
+We can also update an existing field without creating a new one, in this case we will update the `Category` model to have a unique name field, all in two simple steps
+Creating a new file called `/30-09-24-MakeCategoriesUnique.swift`
+
+```swift
+import Fluent
+
+struct MakeCategoriesUnique: Migration {
+	func prepare(on database: any Database) -> EventLoopFuture<Void> {
+		database.schema(Category.v29092024.schemaName)
+			.unique(on: Category.v29092024.name)
+			.update()
+	}
+	
+	func revert(on database: any Database) -> EventLoopFuture<Void> {
+		database.schema(Category.v29092024.schemaName)
+			.deleteUnique(on: Category.v29092024.name)
+			.update()
+	}
+}
+```
+
+and then adding the migration after the create admin user migration
+
+```swift
+app.migrations.add(MakeCategoriesUnique())
+```
 
 ## Versioning the API
+We need to be able to provide the twitterURL in the api endpoints now, however, this could break existing users, and like we saw, it’s all about keeping maintenance, so instead we’re going to create a new endpoint that will serve the new public class
+
+```swift
+final class PublicV2: Content {
+	var id: UUID?
+	var name: String
+	var username: String
+	var twitterURL: String?
+	
+	init(id: UUID?, name: String, username: String, twitterURL: String?) {
+		self.id = id
+		self.name = name
+		self.username = username
+		self.twitterURL = twitterURL
+	}
+}
+```
+
+This one is called `V2` instead, then all the annoying work will be done in the conversion methods, we should have all the instances we need just the first public model and functions, finally in the `/UsersController.swift` we just need to create a get handler and a route
+
+```swift
+func getV2Handler(_ req: Request)
+→> EventLооpFuture<User.PublicV2> {
+	User. find (req.parameters.get("userID"), on: req.db)
+		.nwrap(or: Abort (.notFound) )
+		.convertToPublicV2()
+}
+
+// the route
+let usersV2Route = routes.grouped("api", "v2", "users")
+usersV2Route.get(":userID", use: getV2Handler)
+```
+
+> don’t forget to checkout the UI update for the twitterURL, it’s nothing crazy
+
+### Creating the admin user only in developer/testing mode
+since we only want the admin user to be created in a development safe environment, we need to specify that in the configure file
+
+```swift
+switch app.environment {
+case .development, .testing:
+	app.migrations.add(CreateAdminUser())
+default:
+	break
+}
+```
 
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080

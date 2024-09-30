@@ -12,7 +12,7 @@
 - [ ] retrieve the user profile picture using google and github oauth and store it alongside the user default picture in case he has one
 - [x] i still have a lot of issues with the google OAuth, there are  problems in the redirect, that i need to fix later on. check [console.developers.google.com/apis/credentials][1] for that
 - [ ] replace the all the extensions values in the models and migrations
-
+- [ ] being able to delete the user pfp, using the NIO of course
 ## Side Notes
 - the whole frontend is pretty much the `/WebsiteController.swift` file mixed with the `/Resources` folder
 - there are both the handlers that return a **View** and post handlers that return a **Response**
