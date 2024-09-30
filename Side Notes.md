@@ -10,7 +10,8 @@
 - [ ] fix the register showing up when you’re not in the home folder, and you’re still logged in
 - [ ] categories in acronym creation not working
 - [ ] retrieve the user profile picture using google and github oauth and store it alongside the user default picture in case he has one
-- [x] i still have a lot of issues with the google OAuth, there are problems in the redirect, that i need to fix later on. check [console.developers.google.com/apis/credentials][1] for that
+- [x] i still have a lot of issues with the google OAuth, there are  problems in the redirect, that i need to fix later on. check [console.developers.google.com/apis/credentials][1] for that
+- [ ] replace the all the extensions values in the models and migrations
 
 ## Side Notes
 - the whole frontend is pretty much the `/WebsiteController.swift` file mixed with the `/Resources` folder

@@ -2145,6 +2145,76 @@ authSessionsRoutes.get(
 #endif
 ```
 
+# DB Migration & Versioning
+One problem that we’re facing now is that whenever we change a model, we end up deleting the whole database to reset, unless we initialise with null like we did in the previous chapter, right now we don’t have a data, which isn’t a massive issue, but once we have a dataset of users and acronyms it’s going to be an issue, instead of resetting, we need to modify the database using **migrations**, in this chapter, we’re going to:
+- make the modifications unique
+- add a field in User model for a twitter handle
+- the creation of the admin user will only be made in development or testing mode
+
+## Reminder on migrations
+When fluent runs, it creates a special table that tracks the migration that have been ran, and runs the migrations in the *orders* you added them in. And the migration only runs once, not to cause conflict, so when changing a migrations, since fluent already ran it, it will not execute agains, so the solution is reseting the whole database, and you don’t want to do that and lost all your data, that’s why the solution is a **migration protocol**
+
+> even tho you can modify using these migrations, it’s a good idea to make a backup of the DB and test everything, it’s still a risky procedure
+> When creating the new migration, each one should have a clear name that states its version and is easy to find, ex: YY-MM-DD-FriendlyName.swift.
+
+Now let’s write one, it’s usually written as a `struct` and contains the `prepare` (used for creating a new table or modify an existing one) and `revert` (made to undo the prepare function) methods 
+
+## Updating a Model
+When creating a new field, here are the steps:
+- add an extension below with the new field in create `CreateModel.swift`
+- create a new file in the `/Migrations` folder name it like stated before
+- add the new `prepare` and `revert` functions in the struct with the new field
+- the `revert` function will have to update and delete the field instead of deleting the whole table
+- When adding the migration to the migration list in `/configure.swift`, it must be below the User and Admin user model, since they are they need to be executed first then updated
+
+here is an example of a migration that adds a twitterURL to the user model, without having to reset the database, not that this will be set to null when initialised as it’s not required when creating an account
+
+```swift
+// in CreateUser.swift
+// note that all the other user values are initialised above this one by the extension name of v20240929 aka the version before this one
+enum v20240930 {
+	static let twitterURL = FieldKey(stringLiteral: "twitterURL")
+}
+
+// add to User.swift
+@OptinalField(key: User.v20240930.twitterURL)
+var twitterURL: String? // optional string
+// initialse the init funtion below too, nothing crazy
+```
+
+Now to creating the new migration, we create a new file in the `/Migrations` folder and add the following
+
+```swift
+import Fluent
+
+struct AddTwitterToUser: Migration {
+	// define the two required funcitons
+	func prepare(on database: any Database) -> EventLoopFuture<Void> {
+		// notice the schema is from the old version and the twitterURL is from the newer version
+		database.schema(User.v20240929.schemaName)
+			.field(User.v20240930.twitterURL, .string)
+			.update()
+	}
+	
+	func revert(on database: any Database) -> EventLoopFuture<Void> {
+		database.schema(User.v20240929.schemaName)
+		// this time in revert instead of deleting the table, we will just delete the field
+			.deleteField(User.v20240930.twitterURL)
+			.update()
+	}
+}
+```
+
+When adding the migration to the `configure.swift` file, we make sure we add it **before** the Admin migration so that it works when creating a new database
+
+```swift
+app.migrations.add(AddTwitterURLToUser())
+```
+
+Now the user model has a new null `twitterURL` field
+
+## Versioning the API
+
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
 [3]:	http://127.0.0.1:8080
