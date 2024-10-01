@@ -2287,11 +2287,81 @@ default:
 }
 ```
 
+# Caching
+Yes, we can implement caching in Vapor, to make our using experience more responsive and enjoyable overall, the caching in Vapor isn’t insanely complex, it has two methods the `get(_:as:)` method that searches through the cache for a key, if nothing is found it returns a `nil`, and the `set(_:as:)` method for storing data in the cache
+The one issue here is that the data won’t persist between restarts and unless you store it in a database, either the apps database can be used or a separate special database
+## Redis
+Is an open-source cache storage service used in deployment services like heroku, not only the cache will stay even in between restarts but also between app instances, although it need a little work to be configured
+
+Now let’s make create a request to make to the [Pokeapi][9] website, when doing so, each request takes around 1500ms, which is bad, so for that, we need to create a cache, we do as such
+
+- create the Cache model to be able to use it
+- create a function that searches for the Pokemon index in the cache, if it finds it, then instead of calling the `fetchPokemon(named:)` function, it instead returns the data from the cache, or else, makes the call to the function then stores the result in the cache
+
+Here are the two steps:
+making the model (along with something else in this case to make things clearer)
+
+```
+public final class PokeAPI {
+	/// The HTTP client powering this API.
+	let client: Client
+	let cache: Cache
+  
+	/// Creates a new `PokeAPI` wrapper from the supplied client and cache.
+	init(client: Client, cache: Cache) {
+    self.client = client
+	self.cache = cache
+}
+
+extension Request {
+  public var pokeAPI: PokeAPI {
+		.init(client: self.client, cache: self.cache)
+  }
+}
+```
+
+And the function that verifies if the result is in the cache:
+
+```swift
+public func verify(name: String) -> EventLoopFuture<Bool> {
+	/// we lowercase the characters to make more consistent caching
+	let name = name
+		.lowercased()
+		.trimmingCharacters(in: .whitespacesAndNewlines)
+	
+	/// search for the cache
+	return cache.get(name, as: Bool.self).flatMap { verified in
+		/// if the cache hits, don't call fetchPokemon again for that name
+		if let verified = verified {
+			return self.client.eventLoop.makeSucceededFuture(verified)
+		} else {
+			return self.uncachedVerify(name: name).flatMap { verified in
+				// after the call, store the result in the cache
+				return self.cache.set(name, to: verified)
+					.transform(to: verified)
+			}
+		}
+	}
+}
+```
+
+## Using Fluent Caching
+The biggest advantage of using Fluent in caching is that the cache persists between restarts and shared between instances of the app, for that there’s barely two lines that should be written in `/configure.swift`
+
+```swift
+app.caches.use(.fluent)
+app.migrations.add(CacheEntry.migration)
+```
+
+That’s literally it.
+
+
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
 [3]:	http://127.0.0.1:8080
 [6]:	http://127.0.0.1:8080/api/users/login
 [7]:	console.developers.google.com/apis/credentials
 [8]:	http://localhost:8080/oauth/google
+[9]:	https://pokeapi.co/api/v2/pokemon/%5C(name)%22)
 
 [image-1]:	images/sequenceDiagram%202024-09-05%20at%2010.35.38.png
