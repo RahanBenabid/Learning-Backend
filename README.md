@@ -2355,6 +2355,15 @@ app.migrations.add(CacheEntry.migration)
 
 That’s literally it.
 
+# Middleware
+A middleware, is like stated, a middle man that sits between your client and the router
+
+![][image-2]
+
+And it’s able to change the request and responses, but not create ones. 
+
+The most used type of middleware is the **Error middleware**, when using them, you made sure that all the errors you throw are rendered into appropriate HTTP, because uncaught errors will cause the server to close and print a server error.
+Another famous type is the **File middleware**, it serves content from the public folder, just used for images and all for building a front-and interface
 
 [1]:	http://localhost:8080
 [2]:	http://127.0.0.1:8080
@@ -2365,3 +2374,4 @@ That’s literally it.
 [9]:	https://pokeapi.co/api/v2/pokemon/%5C(name)%22)
 
 [image-1]:	images/sequenceDiagram%202024-09-05%20at%2010.35.38.png
+[image-2]:	images/middleware%202024-10-01%20at%2018.20.50.png
